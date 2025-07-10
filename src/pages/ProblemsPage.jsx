@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import * as FiIcons from 'react-icons/fi';
 import SafeIcon from '../common/SafeIcon';
-import { useSupabaseData, useSupabaseInsert, useSupabaseDelete } from '../hooks/useSupabaseData';
+import { useSupabaseData, useSupabaseInsert, useSupabaseDelete, useSupabaseUpdate } from '../hooks/useSupabaseData';
+import EditModal from '../components/EditModal';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 const { FiPlus, FiEdit2, FiTrash2, FiAlertCircle, FiLoader } = FiIcons;
 
@@ -10,6 +12,7 @@ const ProblemsPage = () => {
   const { data: problems, loading, error, refetch } = useSupabaseData('problems_telos2024');
   const { insert, loading: insertLoading } = useSupabaseInsert('problems_telos2024');
   const { deleteItem, loading: deleteLoading } = useSupabaseDelete('problems_telos2024');
+  const { update, loading: updateLoading } = useSupabaseUpdate('problems_telos2024');
 
   const [newProblem, setNewProblem] = useState({
     priority: 'Medium',
@@ -20,7 +23,19 @@ const ProblemsPage = () => {
   });
 
   const [showForm, setShowForm] = useState(false);
+  const [editingProblem, setEditingProblem] = useState(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
+
+  // Field definitions for the edit modal
+  const problemFields = [
+    { name: 'priority', label: 'Priority', type: 'select', options: ['Low', 'Medium', 'High'] },
+    { name: 'status', label: 'Status', type: 'select', options: ['Active', 'Pending', 'Resolved'] },
+    { name: 'description', label: 'Description', type: 'textarea', fullWidth: true },
+    { name: 'impact', label: 'Impact', type: 'textarea' },
+    { name: 'actions', label: 'Proposed Actions', type: 'textarea' }
+  ];
 
   const addProblem = async () => {
     if (newProblem.description.trim()) {
@@ -35,10 +50,30 @@ const ProblemsPage = () => {
     }
   };
 
-  const deleteProblem = async (id) => {
+  const openEditModal = (problem) => {
+    setEditingProblem(problem);
+    setIsEditModalOpen(true);
+  };
+
+  const handleSaveEdit = async (updatedProblem) => {
     try {
-      setDeletingId(id);
-      await deleteItem(id);
+      await update(updatedProblem.id, updatedProblem);
+      setIsEditModalOpen(false);
+      refetch();
+    } catch (err) {
+      console.error('Error updating problem:', err);
+    }
+  };
+
+  const openConfirmDelete = (id) => {
+    setDeletingId(id);
+    setIsConfirmDialogOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    try {
+      await deleteItem(deletingId);
+      setIsConfirmDialogOpen(false);
       refetch();
     } catch (err) {
       console.error('Error deleting problem:', err);
@@ -222,13 +257,17 @@ const ProblemsPage = () => {
                   </td>
                   <td className="table-cell">
                     <div className="flex space-x-2">
-                      <button className="p-2 text-white/60 hover:text-white hover:bg-white/10 rounded transition-colors">
+                      <button 
+                        onClick={() => openEditModal(problem)}
+                        className="p-2 text-white/60 hover:text-white hover:bg-white/10 rounded transition-colors"
+                        disabled={updateLoading}
+                      >
                         <SafeIcon icon={FiEdit2} className="text-sm" />
                       </button>
                       <button
-                        onClick={() => deleteProblem(problem.id)}
+                        onClick={() => openConfirmDelete(problem.id)}
                         className="p-2 text-white/60 hover:text-red-400 hover:bg-white/10 rounded transition-colors"
-                        disabled={deletingId === problem.id}
+                        disabled={deleteLoading}
                       >
                         <SafeIcon 
                           icon={deletingId === problem.id ? FiLoader : FiTrash2} 
@@ -251,6 +290,29 @@ const ProblemsPage = () => {
           </div>
         )}
       </motion.div>
+
+      {/* Edit Modal */}
+      <EditModal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        title="Edit Problem"
+        fields={problemFields}
+        data={editingProblem}
+        onSave={handleSaveEdit}
+        loading={updateLoading}
+        entityType="problem"
+      />
+
+      {/* Confirm Delete Dialog */}
+      <ConfirmDialog
+        isOpen={isConfirmDialogOpen}
+        onClose={() => setIsConfirmDialogOpen(false)}
+        onConfirm={handleConfirmDelete}
+        title="Delete Problem"
+        message="Are you sure you want to delete this problem? This action cannot be undone."
+        loading={deleteLoading}
+        type="delete"
+      />
     </div>
   );
 };

@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import * as FiIcons from 'react-icons/fi';
 import SafeIcon from '../common/SafeIcon';
-import { useSupabaseData, useSupabaseInsert, useSupabaseDelete } from '../hooks/useSupabaseData';
+import { useSupabaseData, useSupabaseInsert, useSupabaseDelete, useSupabaseUpdate } from '../hooks/useSupabaseData';
+import EditModal from '../components/EditModal';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 const { FiPlus, FiEdit2, FiTrash2, FiZap, FiLoader } = FiIcons;
 
@@ -10,6 +12,7 @@ const ChallengesPage = () => {
   const { data: challenges, loading, error, refetch } = useSupabaseData('challenges_telos2024');
   const { insert, loading: insertLoading } = useSupabaseInsert('challenges_telos2024');
   const { deleteItem, loading: deleteLoading } = useSupabaseDelete('challenges_telos2024');
+  const { update, loading: updateLoading } = useSupabaseUpdate('challenges_telos2024');
 
   const [newChallenge, setNewChallenge] = useState({
     description: '',
@@ -20,7 +23,19 @@ const ChallengesPage = () => {
   });
 
   const [showForm, setShowForm] = useState(false);
+  const [editingChallenge, setEditingChallenge] = useState(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
+
+  // Field definitions for the edit modal
+  const challengeFields = [
+    { name: 'impact', label: 'Impact Level', type: 'select', options: ['Low', 'Medium', 'High'] },
+    { name: 'category', label: 'Category', type: 'select', options: ['Operational', 'Financial', 'Technical', 'Quality', 'Innovation', 'Market'] },
+    { name: 'description', label: 'Challenge Description', type: 'textarea', fullWidth: true },
+    { name: 'solutions', label: 'Proposed Solutions', type: 'textarea' },
+    { name: 'status', label: 'Status', type: 'select', options: ['Pending', 'Active', 'Completed'] }
+  ];
 
   const addChallenge = async () => {
     if (newChallenge.description.trim()) {
@@ -41,10 +56,30 @@ const ChallengesPage = () => {
     }
   };
 
-  const deleteChallenge = async (id) => {
+  const openEditModal = (challenge) => {
+    setEditingChallenge(challenge);
+    setIsEditModalOpen(true);
+  };
+
+  const handleSaveEdit = async (updatedChallenge) => {
     try {
-      setDeletingId(id);
-      await deleteItem(id);
+      await update(updatedChallenge.id, updatedChallenge);
+      setIsEditModalOpen(false);
+      refetch();
+    } catch (err) {
+      console.error('Error updating challenge:', err);
+    }
+  };
+
+  const openConfirmDelete = (id) => {
+    setDeletingId(id);
+    setIsConfirmDialogOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    try {
+      await deleteItem(deletingId);
+      setIsConfirmDialogOpen(false);
       refetch();
     } catch (err) {
       console.error('Error deleting challenge:', err);
@@ -209,13 +244,17 @@ const ChallengesPage = () => {
                 </div>
               </div>
               <div className="flex space-x-2">
-                <button className="p-2 text-white/60 hover:text-white hover:bg-white/10 rounded transition-colors">
+                <button 
+                  onClick={() => openEditModal(challenge)}
+                  className="p-2 text-white/60 hover:text-white hover:bg-white/10 rounded transition-colors"
+                  disabled={updateLoading}
+                >
                   <SafeIcon icon={FiEdit2} className="text-sm" />
                 </button>
                 <button
-                  onClick={() => deleteChallenge(challenge.id)}
+                  onClick={() => openConfirmDelete(challenge.id)}
                   className="p-2 text-white/60 hover:text-red-400 hover:bg-white/10 rounded transition-colors"
-                  disabled={deletingId === challenge.id}
+                  disabled={deleteLoading}
                 >
                   <SafeIcon 
                     icon={deletingId === challenge.id ? FiLoader : FiTrash2} 
@@ -260,6 +299,29 @@ const ChallengesPage = () => {
           <p className="text-white/40 text-sm">Click "Add Challenge" to track your first challenge</p>
         </motion.div>
       )}
+
+      {/* Edit Modal */}
+      <EditModal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        title="Edit Challenge"
+        fields={challengeFields}
+        data={editingChallenge}
+        onSave={handleSaveEdit}
+        loading={updateLoading}
+        entityType="challenge"
+      />
+
+      {/* Confirm Delete Dialog */}
+      <ConfirmDialog
+        isOpen={isConfirmDialogOpen}
+        onClose={() => setIsConfirmDialogOpen(false)}
+        onConfirm={handleConfirmDelete}
+        title="Delete Challenge"
+        message="Are you sure you want to delete this challenge? This action cannot be undone."
+        loading={deleteLoading}
+        type="delete"
+      />
     </div>
   );
 };

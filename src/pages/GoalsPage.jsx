@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import * as FiIcons from 'react-icons/fi';
 import SafeIcon from '../common/SafeIcon';
-import { useSupabaseData, useSupabaseInsert, useSupabaseDelete } from '../hooks/useSupabaseData';
+import { useSupabaseData, useSupabaseInsert, useSupabaseDelete, useSupabaseUpdate } from '../hooks/useSupabaseData';
+import EditModal from '../components/EditModal';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 const { FiPlus, FiEdit2, FiTrash2, FiTarget, FiLoader } = FiIcons;
 
@@ -10,6 +12,7 @@ const GoalsPage = () => {
   const { data: goals, loading, error, refetch } = useSupabaseData('goals_telos2024');
   const { insert, loading: insertLoading } = useSupabaseInsert('goals_telos2024');
   const { deleteItem, loading: deleteLoading } = useSupabaseDelete('goals_telos2024');
+  const { update, loading: updateLoading } = useSupabaseUpdate('goals_telos2024');
 
   const [newGoal, setNewGoal] = useState({
     priority: 'Medium',
@@ -21,7 +24,20 @@ const GoalsPage = () => {
   });
 
   const [showForm, setShowForm] = useState(false);
+  const [editingGoal, setEditingGoal] = useState(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
+
+  // Field definitions for the edit modal
+  const goalFields = [
+    { name: 'priority', label: 'Priority', type: 'select', options: ['Low', 'Medium', 'High'] },
+    { name: 'timeline', label: 'Timeline', type: 'text', placeholder: 'e.g., Q2 2024' },
+    { name: 'description', label: 'Description', type: 'textarea', fullWidth: true },
+    { name: 'success_criteria', label: 'Success Criteria', type: 'textarea' },
+    { name: 'status', label: 'Status', type: 'select', options: ['Pending', 'Active', 'Completed'] },
+    { name: 'progress', label: 'Progress (%)', type: 'number' }
+  ];
 
   const addGoal = async () => {
     if (newGoal.description.trim()) {
@@ -43,10 +59,32 @@ const GoalsPage = () => {
     }
   };
 
-  const deleteGoal = async (id) => {
+  const openEditModal = (goal) => {
+    setEditingGoal(goal);
+    setIsEditModalOpen(true);
+  };
+
+  const handleSaveEdit = async (updatedGoal) => {
     try {
-      setDeletingId(id);
-      await deleteItem(id);
+      // Ensure progress is a number
+      updatedGoal.progress = Number(updatedGoal.progress);
+      await update(updatedGoal.id, updatedGoal);
+      setIsEditModalOpen(false);
+      refetch();
+    } catch (err) {
+      console.error('Error updating goal:', err);
+    }
+  };
+
+  const openConfirmDelete = (id) => {
+    setDeletingId(id);
+    setIsConfirmDialogOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    try {
+      await deleteItem(deletingId);
+      setIsConfirmDialogOpen(false);
       refetch();
     } catch (err) {
       console.error('Error deleting goal:', err);
@@ -247,13 +285,17 @@ const GoalsPage = () => {
                   </td>
                   <td className="table-cell">
                     <div className="flex space-x-1">
-                      <button className="p-1 text-white/60 hover:text-white hover:bg-white/10 rounded transition-colors">
+                      <button 
+                        onClick={() => openEditModal(goal)}
+                        className="p-1 text-white/60 hover:text-white hover:bg-white/10 rounded transition-colors"
+                        disabled={updateLoading}
+                      >
                         <SafeIcon icon={FiEdit2} className="text-xs" />
                       </button>
                       <button
-                        onClick={() => deleteGoal(goal.id)}
+                        onClick={() => openConfirmDelete(goal.id)}
                         className="p-1 text-white/60 hover:text-red-400 hover:bg-white/10 rounded transition-colors"
-                        disabled={deletingId === goal.id}
+                        disabled={deleteLoading}
                       >
                         <SafeIcon 
                           icon={deletingId === goal.id ? FiLoader : FiTrash2} 
@@ -276,6 +318,29 @@ const GoalsPage = () => {
           </div>
         )}
       </motion.div>
+
+      {/* Edit Modal */}
+      <EditModal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        title="Edit Goal"
+        fields={goalFields}
+        data={editingGoal}
+        onSave={handleSaveEdit}
+        loading={updateLoading}
+        entityType="goal"
+      />
+
+      {/* Confirm Delete Dialog */}
+      <ConfirmDialog
+        isOpen={isConfirmDialogOpen}
+        onClose={() => setIsConfirmDialogOpen(false)}
+        onConfirm={handleConfirmDelete}
+        title="Delete Goal"
+        message="Are you sure you want to delete this goal? This action cannot be undone."
+        loading={deleteLoading}
+        type="delete"
+      />
     </div>
   );
 };

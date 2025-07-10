@@ -8,6 +8,7 @@ import GoalsPage from './pages/GoalsPage';
 import MissionPage from './pages/MissionPage';
 import ChallengesPage from './pages/ChallengesPage';
 import AnalyticsPage from './pages/AnalyticsPage';
+import ChatbotAssistant from './components/ChatbotAssistant';
 import './App.css';
 
 function App() {
@@ -30,6 +31,9 @@ function App() {
             <Route path="/analytics" element={<AnalyticsPage />} />
           </Routes>
         </motion.main>
+        
+        {/* Chatbot Assistant */}
+        <ChatbotAssistant />
       </div>
     </Router>
   );

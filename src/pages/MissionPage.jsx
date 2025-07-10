@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import * as FiIcons from 'react-icons/fi';
 import SafeIcon from '../common/SafeIcon';
-import { useSupabaseData, useSupabaseInsert, useSupabaseDelete } from '../hooks/useSupabaseData';
+import { useSupabaseData, useSupabaseInsert, useSupabaseDelete, useSupabaseUpdate } from '../hooks/useSupabaseData';
+import EditModal from '../components/EditModal';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 const { FiPlus, FiEdit2, FiTrash2, FiCompass, FiLoader } = FiIcons;
 
@@ -10,6 +12,7 @@ const MissionPage = () => {
   const { data: missions, loading, error, refetch } = useSupabaseData('missions_telos2024');
   const { insert, loading: insertLoading } = useSupabaseInsert('missions_telos2024');
   const { deleteItem, loading: deleteLoading } = useSupabaseDelete('missions_telos2024');
+  const { update, loading: updateLoading } = useSupabaseUpdate('missions_telos2024');
 
   const [newMission, setNewMission] = useState({
     statement: '',
@@ -18,7 +21,17 @@ const MissionPage = () => {
   });
 
   const [showForm, setShowForm] = useState(false);
+  const [editingMission, setEditingMission] = useState(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
+
+  // Field definitions for the edit modal
+  const missionFields = [
+    { name: 'statement', label: 'Mission Statement', type: 'textarea', fullWidth: true },
+    { name: 'category', label: 'Category', type: 'select', options: ['Core Mission', 'Operational Mission', 'Values Mission', 'Vision Mission'] },
+    { name: 'related_problems', label: 'Related Problems', type: 'textarea' }
+  ];
 
   const addMission = async () => {
     if (newMission.statement.trim()) {
@@ -33,10 +46,30 @@ const MissionPage = () => {
     }
   };
 
-  const deleteMission = async (id) => {
+  const openEditModal = (mission) => {
+    setEditingMission(mission);
+    setIsEditModalOpen(true);
+  };
+
+  const handleSaveEdit = async (updatedMission) => {
     try {
-      setDeletingId(id);
-      await deleteItem(id);
+      await update(updatedMission.id, updatedMission);
+      setIsEditModalOpen(false);
+      refetch();
+    } catch (err) {
+      console.error('Error updating mission:', err);
+    }
+  };
+
+  const openConfirmDelete = (id) => {
+    setDeletingId(id);
+    setIsConfirmDialogOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    try {
+      await deleteItem(deletingId);
+      setIsConfirmDialogOpen(false);
       refetch();
     } catch (err) {
       console.error('Error deleting mission:', err);
@@ -175,13 +208,17 @@ const MissionPage = () => {
                 </div>
               </div>
               <div className="flex space-x-2">
-                <button className="p-2 text-white/60 hover:text-white hover:bg-white/10 rounded transition-colors">
+                <button 
+                  onClick={() => openEditModal(mission)}
+                  className="p-2 text-white/60 hover:text-white hover:bg-white/10 rounded transition-colors"
+                  disabled={updateLoading}
+                >
                   <SafeIcon icon={FiEdit2} className="text-sm" />
                 </button>
                 <button
-                  onClick={() => deleteMission(mission.id)}
+                  onClick={() => openConfirmDelete(mission.id)}
                   className="p-2 text-white/60 hover:text-red-400 hover:bg-white/10 rounded transition-colors"
-                  disabled={deletingId === mission.id}
+                  disabled={deleteLoading}
                 >
                   <SafeIcon 
                     icon={deletingId === mission.id ? FiLoader : FiTrash2} 
@@ -215,6 +252,29 @@ const MissionPage = () => {
           <p className="text-white/40 text-sm">Click "Add Mission" to create your first mission statement</p>
         </motion.div>
       )}
+
+      {/* Edit Modal */}
+      <EditModal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        title="Edit Mission Statement"
+        fields={missionFields}
+        data={editingMission}
+        onSave={handleSaveEdit}
+        loading={updateLoading}
+        entityType="mission"
+      />
+
+      {/* Confirm Delete Dialog */}
+      <ConfirmDialog
+        isOpen={isConfirmDialogOpen}
+        onClose={() => setIsConfirmDialogOpen(false)}
+        onConfirm={handleConfirmDelete}
+        title="Delete Mission Statement"
+        message="Are you sure you want to delete this mission statement? This action cannot be undone."
+        loading={deleteLoading}
+        type="delete"
+      />
     </div>
   );
 };
