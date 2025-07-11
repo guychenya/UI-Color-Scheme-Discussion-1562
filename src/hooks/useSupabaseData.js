@@ -1,17 +1,26 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
 
 export const useSupabaseData = (table, dependencies = []) => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const { user } = useAuth();
 
   const fetchData = async () => {
     try {
       setLoading(true);
+      
+      if (!user) {
+        setData([]);
+        return;
+      }
+
       const { data: result, error } = await supabase
         .from(table)
         .select('*')
+        .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -26,7 +35,7 @@ export const useSupabaseData = (table, dependencies = []) => {
 
   useEffect(() => {
     fetchData();
-  }, dependencies);
+  }, [user, ...dependencies]);
 
   const refetch = () => {
     fetchData();
@@ -38,15 +47,20 @@ export const useSupabaseData = (table, dependencies = []) => {
 export const useSupabaseInsert = (table) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const { user } = useAuth();
 
   const insert = async (data) => {
     try {
       setLoading(true);
       setError(null);
       
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+
       const { data: result, error } = await supabase
         .from(table)
-        .insert([data])
+        .insert([{ ...data, user_id: user.id }])
         .select()
         .single();
 
@@ -67,16 +81,22 @@ export const useSupabaseInsert = (table) => {
 export const useSupabaseUpdate = (table) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const { user } = useAuth();
 
   const update = async (id, data) => {
     try {
       setLoading(true);
       setError(null);
       
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+
       const { data: result, error } = await supabase
         .from(table)
         .update(data)
         .eq('id', id)
+        .eq('user_id', user.id)
         .select()
         .single();
 
@@ -97,16 +117,22 @@ export const useSupabaseUpdate = (table) => {
 export const useSupabaseDelete = (table) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const { user } = useAuth();
 
   const deleteItem = async (id) => {
     try {
       setLoading(true);
       setError(null);
       
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+
       const { error } = await supabase
         .from(table)
         .delete()
-        .eq('id', id);
+        .eq('id', id)
+        .eq('user_id', user.id);
 
       if (error) throw error;
       return true;
