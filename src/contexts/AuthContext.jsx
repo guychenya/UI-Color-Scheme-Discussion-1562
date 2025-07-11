@@ -22,7 +22,6 @@ export const AuthProvider = ({ children }) => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         setUser(session?.user ?? null);
-        
         if (session?.user) {
           await fetchUserProfile(session.user.id);
         }
@@ -39,11 +38,14 @@ export const AuthProvider = ({ children }) => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         console.log('Auth state changed:', event, session);
-        
         setUser(session?.user ?? null);
         
         if (session?.user) {
-          await fetchUserProfile(session.user.id);
+          if (event === 'SIGNED_IN') {
+            await createOrFetchProfile(session.user);
+          } else {
+            await fetchUserProfile(session.user.id);
+          }
         } else {
           setProfile(null);
         }
@@ -55,6 +57,41 @@ export const AuthProvider = ({ children }) => {
     return () => subscription.unsubscribe();
   }, []);
 
+  const createOrFetchProfile = async (user) => {
+    try {
+      // Try to fetch existing profile
+      const { data: existingProfile, error: fetchError } = await supabase
+        .from('user_profiles_telos2024')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+
+      if (existingProfile) {
+        setProfile(existingProfile);
+        return;
+      }
+
+      // If no profile exists, create one
+      const { data: newProfile, error: createError } = await supabase
+        .from('user_profiles_telos2024')
+        .insert([
+          {
+            user_id: user.id,
+            full_name: user.user_metadata?.full_name || '',
+            avatar_url: user.user_metadata?.avatar_url || ''
+          }
+        ])
+        .select()
+        .single();
+
+      if (createError) throw createError;
+      
+      setProfile(newProfile);
+    } catch (error) {
+      console.error('Error in createOrFetchProfile:', error);
+    }
+  };
+
   const fetchUserProfile = async (userId) => {
     try {
       const { data, error } = await supabase
@@ -63,54 +100,10 @@ export const AuthProvider = ({ children }) => {
         .eq('user_id', userId)
         .single();
 
-      if (error && error.code !== 'PGRST116') {
-        console.error('Error fetching profile:', error);
-        return;
-      }
-
+      if (error) throw error;
       setProfile(data);
     } catch (error) {
-      console.error('Error fetching user profile:', error);
-    }
-  };
-
-  const signInWithGoogle = async () => {
-    try {
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: `${window.location.origin}/#/dashboard`
-        }
-      });
-
-      if (error) {
-        console.error('Google OAuth error:', error);
-        throw error;
-      }
-      
-      return data;
-    } catch (error) {
-      console.error('Error signing in with Google:', error);
-      throw error;
-    }
-  };
-
-  const signInWithEmail = async (email, password) => {
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      });
-
-      if (error) {
-        console.error('Email sign-in error:', error);
-        throw error;
-      }
-      
-      return data;
-    } catch (error) {
-      console.error('Error signing in with email:', error);
-      throw error;
+      console.error('Error fetching profile:', error);
     }
   };
 
@@ -126,14 +119,31 @@ export const AuthProvider = ({ children }) => {
         }
       });
 
-      if (error) {
-        console.error('Email sign-up error:', error);
-        throw error;
+      if (error) throw error;
+
+      // If signup successful, create profile
+      if (data.user) {
+        await createOrFetchProfile(data.user);
       }
-      
+
       return data;
     } catch (error) {
       console.error('Error signing up:', error);
+      throw error;
+    }
+  };
+
+  const signInWithEmail = async (email, password) => {
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Error signing in:', error);
       throw error;
     }
   };
@@ -163,7 +173,6 @@ export const AuthProvider = ({ children }) => {
         .single();
 
       if (error) throw error;
-      
       setProfile(data);
       return data;
     } catch (error) {
@@ -176,7 +185,6 @@ export const AuthProvider = ({ children }) => {
     user,
     profile,
     loading,
-    signInWithGoogle,
     signInWithEmail,
     signUpWithEmail,
     signOut,

@@ -34,7 +34,7 @@ const AuthModal = ({ isOpen, onClose }) => {
       await signInWithGoogle();
     } catch (error) {
       console.error('Google sign-in error:', error);
-      if (error.message.includes('provider is not enabled')) {
+      if (error.message && error.message.includes('provider is not enabled')) {
         setError('Google sign-in is not configured yet. Please use email sign-up for now.');
       } else {
         setError(error.message || 'Failed to sign in with Google');
@@ -73,8 +73,18 @@ const AuthModal = ({ isOpen, onClose }) => {
           formData.fullName
         );
         
-        if (result.user && !result.user.email_confirmed_at) {
-          setError('Account created! Please check your email to confirm your account before signing in.');
+        console.log('Sign up result:', result);
+        
+        if (result.user && result.user.identities && result.user.identities.length === 0) {
+          setError('An account with this email already exists. Please sign in instead.');
+          return;
+        }
+        
+        // For Supabase, we may not need to check email_confirmed_at as it depends on settings
+        if (!result.user) {
+          setError('Account created! Please sign in with your new credentials.');
+          setIsSignUp(false);
+          resetForm();
           return;
         }
       } else {
@@ -84,7 +94,21 @@ const AuthModal = ({ isOpen, onClose }) => {
       onClose();
     } catch (error) {
       console.error('Email auth error:', error);
-      setError(error.message || 'Authentication failed');
+      
+      // Handle specific Supabase error messages
+      if (error.message) {
+        if (error.message.includes('Email not confirmed')) {
+          setError('Please check your email to confirm your account before signing in.');
+        } else if (error.message.includes('Invalid login credentials')) {
+          setError('Invalid email or password. Please try again.');
+        } else if (error.message.includes('Email rate limit exceeded')) {
+          setError('Too many attempts. Please try again later.');
+        } else {
+          setError(error.message);
+        }
+      } else {
+        setError('Authentication failed. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -253,7 +277,7 @@ const AuthModal = ({ isOpen, onClose }) => {
                   whileTap={{ scale: 0.98 }}
                 >
                   {loading ? (
-                    <SafeIcon icon={FiLoader} className="animate-spin" />
+                    <SafeIcon icon={FiLoader} className="animate-spin mr-2" />
                   ) : null}
                   <span>
                     {loading 
